@@ -16,13 +16,31 @@ config.read(PATH)
 
 
 def get_config_value(section: str, option: str):
-    res = st = config.get(section, option)
+    return _transform_str_to_type(config.get(section, option), option)
+
+
+def _transform_str_to_type(res: str, option=None) -> object:
+    st = res
     if st.isdigit():
         res = int(st)
     elif st == 'True' or st == 'False':
         res = True if st == 'True' else False
     elif re.match(r"[0-9]?\.[0-9]?", st):
         res = float(st)
+    elif res.count('(') and res.count(')') and option != 'name':
+        arr_obj = []
+        start_st = st
+        while True:
+            if start_st.count('('):
+                arr_obj.append(_transform_str_to_type(start_st[start_st.find('(')+1:start_st.find(',')].strip()))
+                start_st = start_st[start_st.find(',')+1:]
+            elif start_st.count(','):
+                arr_obj.append(_transform_str_to_type(start_st[:start_st.find(',')].strip()))
+                start_st = start_st[start_st.find(',') + 1:]
+            else:
+                arr_obj.append(_transform_str_to_type(start_st[:start_st.find(')')].strip()))
+                break
+        res = tuple(arr_obj)
     return res
 
 
@@ -58,7 +76,7 @@ class Chat:
         self._gen = self._input()
 
     def update_input(self):
-        next(self._gen)
+        return next(self._gen)
 
     def _input(self):
         self.disp.blit(self.surf, [min(*i) for i in zip(self.size)])
@@ -81,7 +99,8 @@ class Chat:
                     if i.key == self.exit_chat:
                         flag = False
                     elif i.key == self.button_send_message:
-                        self.send_message()
+                        res = self.send_message()
+                        if res: yield res
                         self.message = ''
                     elif i.key == pg.K_BACKSPACE and pos_cursor > 0:
                         self.message = self.message[:pos_cursor-1] + self.message[pos_cursor:]
@@ -116,6 +135,8 @@ class Chat:
                 yield pg.Surface((0, 0))
 
     def send_message(self, translate_message: bool = True):
+        if self.message[:6] == '<skin>':
+            return _transform_str_to_type(self.message[6:])
         st = str(datetime.datetime.now().time())
         st = f'[{st[:st.find(".")]}] {self.name}: {self.message}'
         if translate_message and self.manager:

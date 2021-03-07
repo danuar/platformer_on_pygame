@@ -1,6 +1,7 @@
 import logging
 import time
 from typing import List, Dict, Tuple
+from multiprocessing import Process
 
 import pygame as pg
 
@@ -48,7 +49,7 @@ class GameManager:
         # Игрок
         self.param_create_player = {
             'init': [((50, 90),), {'speed_animation': 0.15}],
-            'load': [('heroes1', (0, 0, 255)), {}]
+            'load': [('heroes1', get_config_value('settings', 'color_player')), {}]
         }
         self.pl1 = self.create_player()
 
@@ -64,7 +65,8 @@ class GameManager:
             Weapon('Меч', 'sword.png', 20),
             Gun('Автомат', 'gun1.png', 10, self.base_vector * (.3, 0), (.5, .5)),
             Gun('Снайперка', 'sniper_rifle.png', 70, (2000, 300), default_scatter=3, increase_scatter=200,
-                shot_in_minutes=10, magazine=5, time_reload=3, max_scatter=1000)
+                shot_in_minutes=10, magazine=5, time_reload=3, max_scatter=1000, _rep_color=(26, 26, 26), uncrease_scatter=1.5,
+                time_start_uncrease=4)
         ]
         logging.info('Init game')
 
@@ -88,11 +90,12 @@ class GameManager:
             client = Client()
             pg.display.set_caption('Client')
             #  Debug
-            self.chat.name = self.pl1.name = 'Player11'
-            self.param_create_player['init'][1]['name'] = 'Player11'
-            _ = list(self.param_create_player['load'][0])
-            _[1] = (0, 0, 0)
-            self.param_create_player['load'][0] = _
+            if self.DEBUG:
+                self.chat.name = self.pl1.name = 'Player11'
+                self.param_create_player['init'][1]['name'] = 'Player11'
+                _ = list(self.param_create_player['load'][0])
+                _[1] = (0, 0, 0)
+                self.param_create_player['load'][0] = _
 
             self.manager = ConnectionManager(self.chat, self.param_create_player, client_=client)
 
@@ -187,6 +190,7 @@ class GameManager:
         with Timer('Отрис сообщений'):
             self.chat.draw_message()
 
+        self.input_chat_and_verify_code()
         # Обновление дисплея и добавление заднего фона
         with Timer('Обнов дисплея'):
             self.last_thread = Thread(target=self.update_display, args=(self.display, self.new_background()))
@@ -223,9 +227,7 @@ class GameManager:
         while not self.is_end:
 
             with Timer('События'):
-                if self.chat.is_lock_main_loop_event:
-                    self.chat.update_input()
-                else:
+                if not self.chat.is_lock_main_loop_event:
                     self.loop_control()
             # Server
             with Timer('Сообщения'):
@@ -248,6 +250,12 @@ class GameManager:
             if len(self.list_all_player) > 1:
                 self.handling_message(message)
             self.create_other_player(message)
+
+    def input_chat_and_verify_code(self):
+        if self.chat.is_lock_main_loop_event:
+            res = self.chat.update_input()
+            if type(res) == tuple and self.pl1.get_weapon_now():
+                self.pl1.get_weapon_now().install_skin(res)
 
     def get_weapon(self, name_weapon: str):
         for w in self.list_all_weapon:

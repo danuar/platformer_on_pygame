@@ -166,9 +166,10 @@ class Gun(Weapon):
     list_image_fire: Tuple[pg.Surface] = None
 
     def __init__(self, name, name_file, damage, spawn=(0, 0), size_k: Tuple[int, int] = None, color_aim=(255, 255, 255),
-                 default_scatter: int = 50, increase_scatter: int = 10, shot_in_minutes=62, position_fire=(172, -10),
+                 default_scatter: int = 75, increase_scatter: int = 15, shot_in_minutes=100, position_fire=(172, -10),
                  speed_bullet=50, max_scatter: int = 180, magazine: int = 30, time_reload=1.5, list_all_player=None,
-                 display=None):
+                 display=None, _rep_color: Tuple[int, int, int] = (17, 17, 17), uncrease_scatter: float = 1,
+                 time_start_uncrease: float = 1):
         th = Thread(target=self.load_animation_fire, args=('animation_fire', ))
         super(Gun, self).__init__(name, name_file, damage, spawn, size_k, list_all_player, display)
         self.list_image = []
@@ -178,8 +179,11 @@ class Gun(Weapon):
             self.pos_fire = tuple([i * j for i, j in zip(position_fire, size_k)])
         else:
             self.pos_fire = position_fire
+        self.time_start_uncrease = time_start_uncrease
+        self.uncrease_scatter = uncrease_scatter
         self.size_aim = (default_scatter - 1, default_scatter - 1)
         self.default_scatter = self.scatter_now = default_scatter
+        self.rep_color = _rep_color
         self.length_mag = self.magazine = magazine
         self.increase_scatter = increase_scatter
         self.speed = 60 / shot_in_minutes
@@ -248,8 +252,8 @@ class Gun(Weapon):
 
     def scatter(self, scatter_size: int):
 
-        if scatter_size < 30:
-            scatter_size = 30
+        if scatter_size < 15:
+            scatter_size = 15
         size = (scatter_size, scatter_size)
         self.rect_aim = pg.Surface(size).get_rect(center=self.mouse_pos)
         if size != self.size_aim:
@@ -308,8 +312,8 @@ class Gun(Weapon):
             if time.time() - self.last_time_attack > self.speed:
                 self.is_attack = False
                 for _ in self.gen: pass  # Пропускаем анимацию
-        elif time.time() - self.last_time_attack >= 1 and self.scatter_now > self.default_scatter:
-            self.scatter_now -= 1
+        if time.time() - self.last_time_attack >= self.time_start_uncrease and self.scatter_now > self.default_scatter:
+            self.scatter_now -= self.uncrease_scatter
 
     def animation_fire(self):
         surf_copy = self.image.copy()
@@ -341,6 +345,11 @@ class Gun(Weapon):
         rad = math.radians(self.angle)
         self.pos_muzzle = [x + math.cos(rad) * w, y - math.sin(rad) * w]
 
+    def install_skin(self, color: Tuple[int, int, int]) -> None:
+        pix_array = pg.PixelArray(self.image)
+        pix_array.replace(self.rep_color, color, distance=0.01)
+        self.image = pix_array.make_surface()
+
     def blit(self, Surface: pg.Surface = None, obj: Tuple[pg.Surface, pg.Rect] = None) -> None:
         super(Gun, self).blit(Surface, obj)
         if Surface is None: Surface = self.surface
@@ -357,7 +366,7 @@ class Gun(Weapon):
 
     def __str__(self):
         return f'<Gun: {self.name}, camera={self.is_move_camera}, attack={self.is_attack}, up={self.is_up}, ' \
-               f'angle={self.angle}, pos={self.pos_muzzle}>'
+               f'angle={self.angle}, pos={self.pos_muzzle}> time_last_attack={time.time() - self.last_time_attack}'
 
 
 class Bullet:
